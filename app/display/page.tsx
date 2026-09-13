@@ -4,6 +4,8 @@ import { useState,useEffect,useRef } from "react";
 import { useGame } from "@/components/useGame";
 
 export default function DisplayPage() {
+  const [showCorrect, setShowCorrect] = useState(false);
+  const previousRevealed = useRef<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const previousStrikes = useRef(0);
   const [showStrike, setShowStrike] = useState(false);
@@ -30,7 +32,27 @@ export default function DisplayPage() {
 
     previousStrikes.current = state.strikes;
   }, [state.strikes]);
+  useEffect(() => {
+    const oldRevealed = previousRevealed.current;
 
+    if (state.revealed.length > oldRevealed.length) {
+      setShowCorrect(true);
+
+      const audio = new Audio("/sounds/correct.mp3");
+      audio.volume = 0.75;
+      audio.play().catch(() => {});
+
+      const timer = setTimeout(() => {
+        setShowCorrect(false);
+      }, 900);
+
+      previousRevealed.current = state.revealed;
+
+      return () => clearTimeout(timer);
+    }
+
+    previousRevealed.current = state.revealed;
+  }, [state.revealed]);
   return (
     <main className="display-shell">
       <header className="display-topbar">
@@ -69,7 +91,11 @@ export default function DisplayPage() {
           <span>TECH SHUTTLE • FAMILY FEUD STYLE</span>
           <span>{state.revealed.length} / {activeQuestion?.answers.length ?? 0} REVEALED</span>
         </div>
-
+        {showCorrect && (
+          <div className="correct-layer">
+            <div className="correct-mark">✓</div>
+          </div>
+        )}
         {showStrike && (
           <div className="strike-layer">
             <div className="strike-stack">
@@ -77,6 +103,7 @@ export default function DisplayPage() {
             </div>
           </div>
         )}
+
         <div className="strike-counter">
           <span>STRIKES</span>
 

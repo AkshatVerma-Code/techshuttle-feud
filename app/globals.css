@@ -405,3 +405,51 @@ textarea:focus, input:focus { border-color: rgba(110,102,255,.7); }
   background: rgba(255,70,104,.12);
   text-shadow: 0 0 20px rgba(255,70,104,.7);
 }
+.correct-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+
+  display: grid;
+  place-items: center;
+
+  background: rgba(5, 10, 8, 0.45);
+  backdrop-filter: blur(3px);
+
+  pointer-events: none;
+}
+
+.correct-mark {
+  width: 180px;
+  height: 180px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 50%;
+
+  color: #55d9a6;
+  border: 5px solid #55d9a6;
+
+  font-size: 110px;
+  font-weight: 900;
+
+  text-shadow: 0 0 35px rgba(85, 217, 166, .75);
+  box-shadow:
+    0 0 70px rgba(85, 217, 166, .35),
+    inset 0 0 40px rgba(85, 217, 166, .12);
+
+  animation: correctPop .3s cubic-bezier(.2, 1.5, .4, 1);
+}
+
+@keyframes correctPop {
+  from {
+    transform: scale(.35);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
