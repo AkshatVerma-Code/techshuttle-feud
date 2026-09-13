@@ -1,14 +1,35 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState,useEffect,useRef } from "react";
 import { useGame } from "@/components/useGame";
 
 export default function DisplayPage() {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const previousStrikes = useRef(0);
+  const [showStrike, setShowStrike] = useState(false);
   const { activeQuestion, state, connected } = useGame();
-
+  // useEffect(() => {
+  //   document.documentElement.requestFullscreen?.().catch(() => {});
+  // }, []);
   useEffect(() => {
-    document.documentElement.requestFullscreen?.().catch(() => {});
-  }, []);
+    if (state.strikes > previousStrikes.current) {
+      setShowStrike(true);
+
+      const audio = new Audio("/sounds/buzzer.mp3");
+      audio.volume = 0.8;
+      audio.play().catch(() => {});
+
+      const timer = setTimeout(() => {
+        setShowStrike(false);
+      }, 1500);
+
+      previousStrikes.current = state.strikes;
+
+      return () => clearTimeout(timer);
+    }
+
+    previousStrikes.current = state.strikes;
+  }, [state.strikes]);
 
   return (
     <main className="display-shell">
@@ -49,15 +70,29 @@ export default function DisplayPage() {
           <span>{state.revealed.length} / {activeQuestion?.answers.length ?? 0} REVEALED</span>
         </div>
 
-        {state.strikes > 0 && (
+        {showStrike && (
           <div className="strike-layer">
             <div className="strike-stack">
-              {Array.from({ length: state.strikes }).map((_, i) => (
-                <div className="big-x" key={i}>X</div>
-              ))}
+              <div className="big-x">X</div>
             </div>
           </div>
         )}
+        <div className="strike-counter">
+          <span>STRIKES</span>
+
+          <div className="strike-indicators">
+            {[0, 1, 2].map((index) => (
+              <div
+                key={index}
+                className={`strike-indicator ${
+                  index < state.strikes ? "used" : ""
+                }`}
+              >
+                {index < state.strikes ? "X" : "•"}
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
     </main>
   );
