@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { DEMO_QUESTIONS } from "@/lib/demo-data";
 import { GameState, Question } from "@/lib/types";
 
 const ROOM = "main";
@@ -11,7 +10,7 @@ const ANSWERS_TABLE = "answers";
 const CHANNEL_NAME = `tech-shuttle-feud:${ROOM}`;
 
 const defaultState: GameState = {
-  activeQuestionId: "q1",
+  activeQuestionId: null,
   revealed: [],
   strikes: 0,
   hidden: false,
@@ -48,12 +47,7 @@ export function useGame() {
     if (qError) throw qError;
     if (aError) throw aError;
 
-    if (!qRows?.length) {
-      setQuestions(DEMO_QUESTIONS);
-      return DEMO_QUESTIONS;
-    }
-
-    const mapped = rowsToQuestions(qRows, aRows ?? []);
+    const mapped = qRows?.length ? rowsToQuestions(qRows, aRows ?? []) : [];
     setQuestions(mapped);
     return mapped;
   }
@@ -69,7 +63,7 @@ export function useGame() {
         }
         setConnected(true);
       } catch {
-        setQuestions(DEMO_QUESTIONS);
+        setQuestions([]);
         setConnected(false);
       }
     })();
@@ -115,8 +109,6 @@ export function useGame() {
         .upsert({ id: q.id, question: q.text }, { onConflict: "id" });
       if (qError) throw qError;
 
-      await supabase.from(ANSWERS_TABLE).delete().eq("question_id", q.id);
-
       const answerRows = q.answers.map((a, index) => ({
         id: a.id,
         question_id: q.id,
@@ -124,19 +116,50 @@ export function useGame() {
         popularity: a.popularity,
         position: index + 1
       }));
-      const { error: aError } = await supabase.from(ANSWERS_TABLE).insert(answerRows);
-      if (aError) throw aError;
+      if (answerRows.length) {
+        const { error: aError } = await supabase
+          .from(ANSWERS_TABLE)
+          .upsert(answerRows, { onConflict: "id" });
+        if (aError) throw aError;
+      }
+
+      const { data: existingAnswers, error: existingAnswersError } = await supabase
+        .from(ANSWERS_TABLE)
+        .select("id")
+        .eq("question_id", q.id);
+      if (existingAnswersError) throw existingAnswersError;
+
+      const answerIds = answerRows.map((answer) => answer.id);
+      const staleAnswerIds = (existingAnswers ?? [])
+        .map((answer: any) => answer.id)
+        .filter((id: string) => !answerIds.includes(id));
+
+      if (staleAnswerIds.length) {
+        const { error: staleAnswerError } = await supabase
+          .from(ANSWERS_TABLE)
+          .delete()
+          .in("id", staleAnswerIds);
+        if (staleAnswerError) throw staleAnswerError;
+      }
     }
 
-    // Remove questions not present anymore.
-    const existingIds = nextQuestions.map((q) => q.id);
-    if (existingIds.length) {
-      const { data: existing } = await supabase.from(QUESTIONS_TABLE).select("id");
-      const deleted = (existing ?? []).map((x: any) => x.id).filter((id: string) => !existingIds.includes(id));
-      if (deleted.length) await supabase.from(QUESTIONS_TABLE).delete().in("id", deleted);
-    }
+    setQuestions((current) => {
+      const savedById = new Map(nextQuestions.map((question) => [question.id, question]));
+      const merged = current.map((question) => savedById.get(question.id) ?? question);
+      const currentIds = new Set(current.map((question) => question.id));
+      return [
+        ...merged,
+        ...nextQuestions.filter((question) => !currentIds.has(question.id))
+      ];
+    });
+    await broadcast({ type: "QUESTIONS_UPDATED" });
+  }
 
-    setQuestions(nextQuestions);
+  async function deleteQuestion(questionId: string) {
+    const { error } = await supabase.from(QUESTIONS_TABLE).delete().eq("id", questionId);
+    if (error) throw error;
+
+    setQuestions((current) => current.filter((question) => question.id !== questionId));
     await broadcast({ type: "QUESTIONS_UPDATED" });
   }
 
@@ -197,6 +220,7 @@ export function useGame() {
     activeQuestion,
     connected,
     saveQuestions,
+    deleteQuestion,
     loadQuestion,
     revealAnswer,
     addStrike,

@@ -16,6 +16,7 @@ export default function AdminPage() {
     state,
     connected,
     saveQuestions,
+    deleteQuestion: deleteQuestionFromDb,
     loadQuestion,
     revealAnswer,
     addStrike,
@@ -86,12 +87,16 @@ export default function AdminPage() {
       ? questions.map((q) => (q.id === editingId ? next : q))
       : [...questions, next];
 
-    await saveQuestions(nextQuestions);
-    await loadQuestion(next.id);
-    setMessage(editingId ? "Question updated." : "Question added.");
-    setEditingId(null);
-    setQuestionText("");
-    setAnswers(Array.from({ length: 6 }, (_, i) => ({ id: uid(`a${i}`), text: "", popularity: 0 })));
+    try {
+      await saveQuestions(nextQuestions);
+      await loadQuestion(next.id);
+      setMessage(editingId ? "Question updated." : "Question added.");
+      setEditingId(null);
+      setQuestionText("");
+      setAnswers(Array.from({ length: 6 }, (_, i) => ({ id: uid(`a${i}`), text: "", popularity: 0 })));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save question.");
+    }
   }
 
   async function deleteQuestion(id: string) {
@@ -99,16 +104,26 @@ export default function AdminPage() {
       setMessage("Keep at least one question.");
       return;
     }
+    if (!window.confirm("Delete this question from Supabase?")) return;
+
     const next = questions.filter((q) => q.id !== id);
-    await saveQuestions(next);
-    await loadQuestion(next[0].id);
-    setMessage("Question deleted.");
+    try {
+      await deleteQuestionFromDb(id);
+      await loadQuestion(next[0].id);
+      setMessage("Question deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not delete question.");
+    }
   }
 
   async function importDemo() {
-    await saveQuestions(DEMO_QUESTIONS);
-    await loadQuestion(DEMO_QUESTIONS[0].id);
-    setMessage("Demo questions loaded.");
+    try {
+      await saveQuestions(DEMO_QUESTIONS);
+      await loadQuestion(DEMO_QUESTIONS[0].id);
+      setMessage("Demo questions added or updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not load demo questions.");
+    }
   }
 
   return (
